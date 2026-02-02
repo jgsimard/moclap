@@ -23,36 +23,22 @@ fn cli_parse[T: Defaultable & Movable]() raises -> T:
     comptime uint = get_type_name[UInt]()
 
     # ints
-    comptime i8 = get_type_name[Int8]()
-    comptime i16 = get_type_name[Int16]()
-    comptime i32 = get_type_name[Int32]()
-    comptime i64 = get_type_name[Int64]()
-
-    comptime u8 = get_type_name[UInt8]()
-    comptime u16 = get_type_name[UInt16]()
-    comptime u32 = get_type_name[UInt32]()
-    comptime u64 = get_type_name[UInt64]()
-
     comptime ints = {
-        i8: DType.int8,
-        i16: DType.int16,
-        i32: DType.int32,
-        i64: DType.int64,
-        u8: DType.uint8,
-        u16: DType.uint16,
-        u32: DType.uint32,
-        u64: DType.uint64,
+        get_type_name[Int8](): DType.int8,
+        get_type_name[Int16](): DType.int16,
+        get_type_name[Int32](): DType.int32,
+        get_type_name[Int64](): DType.int64,
+        get_type_name[UInt8](): DType.uint8,
+        get_type_name[UInt16](): DType.uint16,
+        get_type_name[UInt32](): DType.uint32,
+        get_type_name[UInt64](): DType.uint64,
     }
 
     # floats
-    comptime f16 = get_type_name[Float16]()
-    comptime f32 = get_type_name[Float32]()
-    comptime f64 = get_type_name[Float64]()
-
     comptime floats = {
-        f16: DType.float16,
-        f32: DType.float32,
-        f64: DType.float64,
+        get_type_name[Float16](): DType.float16,
+        get_type_name[Float32](): DType.float32,
+        get_type_name[Float64](): DType.float64,
     }
 
     var args = argv()
