@@ -72,70 +72,73 @@ fn cli_parse[T: Defaultable & Movable]() raises -> T:
     while i < len(args):
         var arg = args[i]
 
-        if arg.startswith("--"):
-            var arg_name = arg.strip("-")
+        if not arg.startswith("--"):
+            i += 1
+            continue
 
-            if arg_name not in materialize[field_names]():
-                raise Error("Warning: Unknown arg --{}".format(arg_name))
+        var arg_name = arg.strip("-")
+
+        if arg_name not in materialize[field_names]():
+            raise Error("Warning: Unknown arg --{}".format(arg_name))
+
+        @parameter
+        for idx in range(field_count):
+            comptime field_name = field_names[idx]
+            comptime field_type = field_types[idx]
+            comptime field_type_name = get_type_name[field_type]()
+
+            if arg_name != field_name:
+                continue
+
+            ref field = __struct_field_ref(idx, instance)
 
             @parameter
-            for idx in range(field_count):
-                comptime field_name = field_names[idx]
-                comptime field_type = field_types[idx]
-                comptime field_type_name = get_type_name[field_type]()
+            if field_type_name == bool:
+                field = rebind[type_of(field)](~rebind[Bool](field))
+                break
 
-                if arg_name == field_name:
-                    ref field = __struct_field_ref(idx, instance)
+            var val: StringSlice[StaticConstantOrigin]
+            if i + 1 < len(args):
+                i += 1
+                val = args[i]
+            else:
+                raise Error("Arg -- {} requires a value".format(arg_name))
 
-                    @parameter
-                    if field_type_name == bool:
-                        field = rebind[type_of(field)](~rebind[Bool](field))
-                        break
+            @parameter
+            if field_type_name == str:
+                field = rebind[type_of(field)](String(val))
+                break
 
-                    var val: StringSlice[StaticConstantOrigin]
-                    if i + 1 < len(args):
-                        i += 1
-                        val = args[i]
-                    else:
-                        raise Error(
-                            "Arg -- {} requires a value".format(arg_name)
-                        )
+            # index types
+            elif field_type_name == int:
+                field = rebind[type_of(field)](atol(val))
+                break
 
-                    @parameter
-                    if field_type_name == str:
-                        field = rebind[type_of(field)](String(val))
-                        break
+            elif field_type_name == uint:
+                field = rebind[type_of(field)](UInt(atol(val)))
+                break
 
-                    # index types
-                    elif field_type_name == int:
-                        field = rebind[type_of(field)](atol(val))
-                        break
+            # ints
+            elif field_type_name in ints:
+                comptime dtype = ints.get(field_type_name).value()
+                field = rebind[type_of(field)](
+                    _parse_int[dtype](val, field_name)
+                )
+                break
 
-                    elif field_type_name == uint:
-                        field = rebind[type_of(field)](UInt(atol(val)))
-                        break
+            # floats
+            elif field_type_name in floats:
+                comptime dtype = floats.get(field_type_name).value()
+                field = rebind[type_of(field)](
+                    _parse_float[dtype](val, field_name)
+                )
+                break
 
-                    # ints
-                    elif field_type_name in ints:
-                        comptime dtype = ints.get(field_type_name).value()
-                        field = rebind[type_of(field)](
-                            _parse_int[dtype](val, field_name)
-                        )
-                        break
-
-                    # floats
-                    elif field_type_name in floats:
-                        comptime dtype = floats.get(field_type_name).value()
-                        field = rebind[type_of(field)](
-                            _parse_float[dtype](val, field_name)
-                        )
-                        break
-
-                    else:
-                        raise Error(
-                            "Cannot parse CLI value for unknown"
-                            " type: {}, value:{}".format(field_type_name, val)
-                        )
+            else:
+                raise Error(
+                    "Cannot parse CLI value for unknown"
+                    " type: {}, value:{}".format(field_type_name, val)
+                )
         i += 1
 
     return instance^
