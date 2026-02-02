@@ -171,7 +171,7 @@ fn _parse_float[
     return Scalar[type](raw)
 
 
-fn _print_help[T: Defaultable]():
+fn _print_help[T: Defaultable]() raises:
     print("Command Line Parser Help (-h or --help)")
     print("Usage: [options]")
     print("\nOptions:")
@@ -200,8 +200,12 @@ fn _print_help[T: Defaultable]():
         var l2 = len(tn)
         var pad_def = " " * (10 - l2) if l2 < 10 else " "
 
+        @parameter
+        if not conforms_to(field_type, Writable):
+            raise "type is not Writable = unable to print help"
+
         print(
             "  --{} {}: {} {}(default: {})".format(
-                field_name, pad_name, tn, pad_def, val
+                field_name, pad_name, tn, pad_def, trait_downcast[Writable](val)
             )
         )
