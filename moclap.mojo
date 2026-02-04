@@ -11,6 +11,7 @@ from reflection import (
 from os.path import basename
 from utils.numerics import max_finite, min_finite
 from sys import exit
+from math import clamp
 
 
 fn cli_parse[T: Defaultable & Movable]() raises -> T:
@@ -191,7 +192,7 @@ fn _print_help[T: Defaultable]() raises:
 
         fn _get_padding[S: Stringable](a: S, max_pad_len: Int = 10) -> String:
             var len = len(String(a))
-            return " " * (max_pad_len - len) if len < max_pad_len else " "
+            return " " * clamp(max_pad_len - len, 1, max_pad_len)
 
         var pad_name = _get_padding(field_name)
         var pad_def = _get_padding(tn)
