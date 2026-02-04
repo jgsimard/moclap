@@ -6,7 +6,9 @@ from reflection import (
     get_type_name,
     get_base_type_name,
     is_struct_type,
+    source_location,
 )
+from os.path import basename
 from utils.numerics import max_finite, min_finite
 from sys import exit
 
@@ -28,6 +30,7 @@ fn cli_parse[T: Defaultable & Movable]() raises -> T:
         get_type_name[Int16](): DType.int16,
         get_type_name[Int32](): DType.int32,
         get_type_name[Int64](): DType.int64,
+        # get_type_name[UInt](): DType.uint,
         get_type_name[UInt8](): DType.uint8,
         get_type_name[UInt16](): DType.uint16,
         get_type_name[UInt32](): DType.uint32,
@@ -46,7 +49,7 @@ fn cli_parse[T: Defaultable & Movable]() raises -> T:
 
     # help
     for arg in args:
-        if arg == "--help" or arg == "-h":
+        if arg in ["--help", "-h"]:
             _print_help[T]()
             exit(0)
 
@@ -162,7 +165,9 @@ fn _parse_float[
 
 fn _print_help[T: Defaultable]() raises:
     print("Command Line Parser Help (-h or --help)")
-    print("Usage: [options]")
+    var loc = source_location()
+    var file_name = basename(loc.file_name)
+    print("Usage: mojo {} [options]".format(file_name))
     print("\nOptions:")
 
     comptime field_names = struct_field_names[T]()
@@ -184,10 +189,12 @@ fn _print_help[T: Defaultable]() raises:
 
         ref val = __struct_field_ref(i, default)
 
-        var l = len(String(field_name))
-        var pad_name = " " * (10 - l) if l < 10 else " "
-        var l2 = len(tn)
-        var pad_def = " " * (10 - l2) if l2 < 10 else " "
+        fn _get_padding[S: Stringable](a: S, max_pad_len: Int = 10) -> String:
+            var len = len(String(a))
+            return " " * (max_pad_len - len) if len < max_pad_len else " "
+
+        var pad_name = _get_padding(field_name)
+        var pad_def = _get_padding(tn)
 
         @parameter
         if not conforms_to(field_type, Writable):
