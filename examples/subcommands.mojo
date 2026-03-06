@@ -1,4 +1,4 @@
-from utils import Variant
+from std.utils import Variant
 
 from moclap import cli_parse
 

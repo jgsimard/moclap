@@ -1,5 +1,5 @@
-from sys import argv
-from reflection import (
+from std.sys import argv, exit
+from std.reflection import (
     struct_field_count,
     struct_field_names,
     struct_field_types,
@@ -8,14 +8,13 @@ from reflection import (
     is_struct_type,
     source_location,
 )
-from os.path import basename
-from utils.numerics import max_finite, min_finite
-from sys import exit
-from math import clamp
+from std.os.path import basename
+from std.utils.numerics import max_finite, min_finite
+from std.math import clamp
 
 
-fn cli_parse[T: Defaultable & Movable]() raises -> T:
-    __comptime_assert is_struct_type[T]()
+fn cli_parse[T: Defaultable & Movable & Writable]() raises -> T:
+    comptime assert is_struct_type[T]()
 
     # types
     comptime bool = get_type_name[Bool]()
@@ -27,6 +26,7 @@ fn cli_parse[T: Defaultable & Movable]() raises -> T:
 
     # ints
     comptime ints = {
+        # get_type_name[Int](): DType.int,
         get_type_name[Int8](): DType.int8,
         get_type_name[Int16](): DType.int16,
         get_type_name[Int32](): DType.int32,
@@ -71,8 +71,7 @@ fn cli_parse[T: Defaultable & Movable]() raises -> T:
         if arg_name not in materialize[field_names]():
             raise Error("Warning: Unknown arg --{}".format(arg_name))
 
-        @parameter
-        for idx in range(field_count):
+        comptime for idx in range(field_count):
             comptime field_name = field_names[idx]
             comptime field_type = field_types[idx]
             comptime field_type_name = get_type_name[field_type]()
@@ -82,8 +81,7 @@ fn cli_parse[T: Defaultable & Movable]() raises -> T:
 
             ref field = __struct_field_ref(idx, instance)
 
-            @parameter
-            if field_type_name == bool:
+            comptime if field_type_name == bool:
                 field = rebind[type_of(field)](~rebind[Bool](field))
                 break
 
@@ -94,8 +92,7 @@ fn cli_parse[T: Defaultable & Movable]() raises -> T:
             else:
                 raise Error("Arg -- {} requires a value".format(arg_name))
 
-            @parameter
-            if field_type_name == str:
+            comptime if field_type_name == str:
                 field = rebind[type_of(field)](String(val))
                 break
 
@@ -164,7 +161,7 @@ fn _parse_float[
     return Scalar[type](raw)
 
 
-fn _print_help[T: Defaultable]() raises:
+fn _print_help[T: Defaultable & Writable]() raises:
     print("Command Line Parser Help (-h or --help)")
     var loc = source_location()
     var file_name = basename(loc.file_name)
@@ -177,8 +174,7 @@ fn _print_help[T: Defaultable]() raises:
 
     var default = T()
 
-    @parameter
-    for i in range(field_count):
+    comptime for i in range(field_count):
         comptime field_name = field_names[i]
         comptime field_type = field_types[i]
         comptime field_type_name = get_type_name[field_type]()
@@ -190,19 +186,16 @@ fn _print_help[T: Defaultable]() raises:
 
         ref val = __struct_field_ref(i, default)
 
-        fn _get_padding[S: Stringable](a: S, max_pad_len: Int = 10) -> String:
+        fn _get_padding[S: Writable](a: S, max_pad_len: Int = 10) -> String:
             var len = len(String(a))
             return " " * clamp(max_pad_len - len, 1, max_pad_len)
 
         var pad_name = _get_padding(field_name)
         var pad_def = _get_padding(tn)
 
-        @parameter
-        if not conforms_to(field_type, Writable):
+        comptime if not conforms_to(field_type, Writable):
             raise "type is not Writable = unable to print help"
 
-        print(
-            "  --{} {}: {} {}(default: {})".format(
-                field_name, pad_name, tn, pad_def, trait_downcast[Writable](val)
-            )
-        )
+        dv = String(trait_downcast[Writable](val))
+
+        print(t"--{field_name} {pad_name}: {tn} {pad_def}(default: {dv})")
