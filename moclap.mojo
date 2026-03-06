@@ -1,18 +1,20 @@
-from sys import argv
-from reflection import (
+from std.sys import argv, exit
+from std.reflection import (
     struct_field_count,
     struct_field_names,
     struct_field_types,
     get_type_name,
     get_base_type_name,
     is_struct_type,
+    source_location,
 )
-from utils.numerics import max_finite, min_finite
-from sys import exit
+from std.os.path import basename
+from std.utils.numerics import max_finite, min_finite
+from std.math import clamp
 
 
-fn cli_parse[T: Defaultable & Movable]() raises -> T:
-    __comptime_assert is_struct_type[T]()
+fn cli_parse[T: Defaultable & Movable & Writable]() raises -> T:
+    comptime assert is_struct_type[T]()
 
     # types
     comptime bool = get_type_name[Bool]()
@@ -23,36 +25,24 @@ fn cli_parse[T: Defaultable & Movable]() raises -> T:
     comptime uint = get_type_name[UInt]()
 
     # ints
-    comptime i8 = get_type_name[Int8]()
-    comptime i16 = get_type_name[Int16]()
-    comptime i32 = get_type_name[Int32]()
-    comptime i64 = get_type_name[Int64]()
-
-    comptime u8 = get_type_name[UInt8]()
-    comptime u16 = get_type_name[UInt16]()
-    comptime u32 = get_type_name[UInt32]()
-    comptime u64 = get_type_name[UInt64]()
-
     comptime ints = {
-        i8: DType.int8,
-        i16: DType.int16,
-        i32: DType.int32,
-        i64: DType.int64,
-        u8: DType.uint8,
-        u16: DType.uint16,
-        u32: DType.uint32,
-        u64: DType.uint64,
+        # get_type_name[Int](): DType.int,
+        get_type_name[Int8](): DType.int8,
+        get_type_name[Int16](): DType.int16,
+        get_type_name[Int32](): DType.int32,
+        get_type_name[Int64](): DType.int64,
+        # get_type_name[UInt](): DType.uint,
+        get_type_name[UInt8](): DType.uint8,
+        get_type_name[UInt16](): DType.uint16,
+        get_type_name[UInt32](): DType.uint32,
+        get_type_name[UInt64](): DType.uint64,
     }
 
     # floats
-    comptime f16 = get_type_name[Float16]()
-    comptime f32 = get_type_name[Float32]()
-    comptime f64 = get_type_name[Float64]()
-
     comptime floats = {
-        f16: DType.float16,
-        f32: DType.float32,
-        f64: DType.float64,
+        get_type_name[Float16](): DType.float16,
+        get_type_name[Float32](): DType.float32,
+        get_type_name[Float64](): DType.float64,
     }
 
     var args = argv()
@@ -60,7 +50,7 @@ fn cli_parse[T: Defaultable & Movable]() raises -> T:
 
     # help
     for arg in args:
-        if arg == "--help" or arg == "-h":
+        if arg in ["--help", "-h"]:
             _print_help[T]()
             exit(0)
 
@@ -72,70 +62,70 @@ fn cli_parse[T: Defaultable & Movable]() raises -> T:
     while i < len(args):
         var arg = args[i]
 
-        if arg.startswith("--"):
-            var arg_name = arg.strip("-")
+        if not arg.startswith("--"):
+            i += 1
+            continue
 
-            if arg_name not in materialize[field_names]():
-                raise Error("Warning: Unknown arg --{}".format(arg_name))
+        var arg_name = arg.strip("-")
 
-            @parameter
-            for idx in range(field_count):
-                comptime field_name = field_names[idx]
-                comptime field_type = field_types[idx]
-                comptime field_type_name = get_type_name[field_type]()
+        if arg_name not in materialize[field_names]():
+            raise Error("Warning: Unknown arg --{}".format(arg_name))
 
-                if arg_name == field_name:
-                    ref field = __struct_field_ref(idx, instance)
+        comptime for idx in range(field_count):
+            comptime field_name = field_names[idx]
+            comptime field_type = field_types[idx]
+            comptime field_type_name = get_type_name[field_type]()
 
-                    @parameter
-                    if field_type_name == bool:
-                        field = rebind[type_of(field)](~rebind[Bool](field))
-                        break
+            if arg_name != field_name:
+                continue
 
-                    var val: StringSlice[StaticConstantOrigin]
-                    if i + 1 < len(args):
-                        i += 1
-                        val = args[i]
-                    else:
-                        raise Error(
-                            "Arg -- {} requires a value".format(arg_name)
-                        )
+            ref field = __struct_field_ref(idx, instance)
 
-                    @parameter
-                    if field_type_name == str:
-                        field = rebind[type_of(field)](String(val))
-                        break
+            comptime if field_type_name == bool:
+                field = rebind[type_of(field)](~rebind[Bool](field))
+                break
 
-                    # index types
-                    elif field_type_name == int:
-                        field = rebind[type_of(field)](atol(val))
-                        break
+            var val: StringSlice[StaticConstantOrigin]
+            if i + 1 < len(args):
+                i += 1
+                val = args[i]
+            else:
+                raise Error("Arg -- {} requires a value".format(arg_name))
 
-                    elif field_type_name == uint:
-                        field = rebind[type_of(field)](UInt(atol(val)))
-                        break
+            comptime if field_type_name == str:
+                field = rebind[type_of(field)](String(val))
+                break
 
-                    # ints
-                    elif field_type_name in ints:
-                        comptime dtype = ints.get(field_type_name).value()
-                        field = rebind[type_of(field)](
-                            _parse_int[dtype](val, field_name)
-                        )
-                        break
+            # index types
+            elif field_type_name == int:
+                field = rebind[type_of(field)](atol(val))
+                break
 
-                    # floats
-                    elif field_type_name in floats:
-                        comptime dtype = floats.get(field_type_name).value()
-                        field = rebind[type_of(field)](
-                            _parse_float[dtype](val, field_name)
-                        )
-                        break
+            elif field_type_name == uint:
+                field = rebind[type_of(field)](UInt(atol(val)))
+                break
 
-                    else:
-                        raise Error(
-                            "Cannot parse CLI value for unknown"
-                            " type: {}, value:{}".format(field_type_name, val)
-                        )
+            # ints
+            elif field_type_name in ints:
+                comptime dtype = ints.get(field_type_name).value()
+                field = rebind[type_of(field)](
+                    _parse_int[dtype](val, field_name)
+                )
+                break
+
+            # floats
+            elif field_type_name in floats:
+                comptime dtype = floats.get(field_type_name).value()
+                field = rebind[type_of(field)](
+                    _parse_float[dtype](val, field_name)
+                )
+                break
+
+            else:
+                raise Error(
+                    "Cannot parse CLI value for unknown"
+                    " type: {}, value:{}".format(field_type_name, val)
+                )
         i += 1
 
     return instance^
@@ -171,9 +161,11 @@ fn _parse_float[
     return Scalar[type](raw)
 
 
-fn _print_help[T: Defaultable]():
+fn _print_help[T: Defaultable & Writable]() raises:
     print("Command Line Parser Help (-h or --help)")
-    print("Usage: [options]")
+    var loc = source_location()
+    var file_name = basename(loc.file_name)
+    print("Usage: mojo {} [options]".format(file_name))
     print("\nOptions:")
 
     comptime field_names = struct_field_names[T]()
@@ -182,8 +174,7 @@ fn _print_help[T: Defaultable]():
 
     var default = T()
 
-    @parameter
-    for i in range(field_count):
+    comptime for i in range(field_count):
         comptime field_name = field_names[i]
         comptime field_type = field_types[i]
         comptime field_type_name = get_type_name[field_type]()
@@ -195,13 +186,16 @@ fn _print_help[T: Defaultable]():
 
         ref val = __struct_field_ref(i, default)
 
-        var l = len(String(field_name))
-        var pad_name = " " * (10 - l) if l < 10 else " "
-        var l2 = len(tn)
-        var pad_def = " " * (10 - l2) if l2 < 10 else " "
+        fn _get_padding[S: Writable](a: S, max_pad_len: Int = 10) -> String:
+            var len = len(String(a))
+            return " " * clamp(max_pad_len - len, 1, max_pad_len)
 
-        print(
-            "  --{} {}: {} {}(default: {})".format(
-                field_name, pad_name, tn, pad_def, val
-            )
-        )
+        var pad_name = _get_padding(field_name)
+        var pad_def = _get_padding(tn)
+
+        comptime if not conforms_to(field_type, Writable):
+            raise "type is not Writable = unable to print help"
+
+        dv = String(trait_downcast[Writable](val))
+
+        print(t"--{field_name} {pad_name}: {tn} {pad_def}(default: {dv})")
