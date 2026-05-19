@@ -1,48 +1,50 @@
 from std.sys import argv, exit
 from std.reflection import (
-    struct_field_count,
-    struct_field_names,
-    struct_field_types,
-    get_type_name,
-    get_base_type_name,
-    is_struct_type,
+    # struct_field_count,
+    # struct_field_names,
+    # struct_field_types,
+    # get_type_name,
+    # get_base_type_name,
+    # is_struct_type,
     source_location,
+    # reflect
 )
 from std.os.path import basename
 from std.utils.numerics import max_finite, min_finite
 from std.math import clamp
 
 
-fn cli_parse[T: Defaultable & Movable & Writable]() raises -> T:
-    comptime assert is_struct_type[T]()
+def cli_parse[T: Defaultable & Movable & Writable & ImplicitlyDestructible]() raises -> T:
+    comptime r = reflect[T]
+    comptime assert r.is_struct()
 
     # types
-    comptime bool = get_type_name[Bool]()
-    comptime str = get_type_name[String]()
+    comptime bool = reflect[Bool].name()
+    comptime str = reflect[String].name()
 
     # index
-    comptime int = get_type_name[Int]()
-    comptime uint = get_type_name[UInt]()
+    comptime int = reflect[Int].name()
+    comptime uint = reflect[UInt].name()
 
     # ints
     comptime ints = {
         # get_type_name[Int](): DType.int,
-        get_type_name[Int8](): DType.int8,
-        get_type_name[Int16](): DType.int16,
-        get_type_name[Int32](): DType.int32,
-        get_type_name[Int64](): DType.int64,
+        reflect[Int8].name(): DType.int8,
+        reflect[Int16].name(): DType.int16,
+        reflect[Int32].name(): DType.int32,
+        reflect[Int64].name(): DType.int64,
         # get_type_name[UInt](): DType.uint,
-        get_type_name[UInt8](): DType.uint8,
-        get_type_name[UInt16](): DType.uint16,
-        get_type_name[UInt32](): DType.uint32,
-        get_type_name[UInt64](): DType.uint64,
+        reflect[UInt8].name(): DType.uint8,
+        reflect[UInt16].name(): DType.uint16,
+        reflect[UInt32].name(): DType.uint32,
+        reflect[UInt64].name(): DType.uint64,
     }
 
     # floats
     comptime floats = {
-        get_type_name[Float16](): DType.float16,
-        get_type_name[Float32](): DType.float32,
-        get_type_name[Float64](): DType.float64,
+        reflect[Float16].name(): DType.float16,
+        reflect[Float32].name(): DType.float32,
+        reflect[Float64].name(): DType.float64,
     }
 
     var args = argv()
@@ -54,9 +56,9 @@ fn cli_parse[T: Defaultable & Movable & Writable]() raises -> T:
             _print_help[T]()
             exit(0)
 
-    comptime field_count = struct_field_count[T]()
-    comptime field_names = struct_field_names[T]()
-    comptime field_types = struct_field_types[T]()
+    comptime field_count = r.field_count()
+    comptime field_names = r.field_names()
+    comptime field_types = r.field_types()
 
     var i = 1
     while i < len(args):
@@ -74,15 +76,17 @@ fn cli_parse[T: Defaultable & Movable & Writable]() raises -> T:
         comptime for idx in range(field_count):
             comptime field_name = field_names[idx]
             comptime field_type = field_types[idx]
-            comptime field_type_name = get_type_name[field_type]()
-
+            comptime field_type_name = reflect[field_type].name()
+            
             if arg_name != field_name:
                 continue
 
-            ref field = __struct_field_ref(idx, instance)
-
+            ref field = reflect[T].field_ref[idx](instance)
+            comptime assert conforms_to(field_type, ImplicitlyCopyable)
+            
             comptime if field_type_name == bool:
-                field = rebind[type_of(field)](~rebind[Bool](field))
+                comptime assert conforms_to(field_type, Boolable)
+                field = rebind[field_type](~Bool(field))
                 break
 
             var val: StringSlice[StaticConstantOrigin]
@@ -93,22 +97,23 @@ fn cli_parse[T: Defaultable & Movable & Writable]() raises -> T:
                 raise Error("Arg -- {} requires a value".format(arg_name))
 
             comptime if field_type_name == str:
-                field = rebind[type_of(field)](String(val))
+                var parsed = rebind[field_type](String(val))
+                field = parsed^
                 break
 
             # index types
             elif field_type_name == int:
-                field = rebind[type_of(field)](atol(val))
+                field = rebind[field_type](atol(val))
                 break
 
             elif field_type_name == uint:
-                field = rebind[type_of(field)](UInt(atol(val)))
+                field = rebind[field_type](UInt(atol(val)))
                 break
 
             # ints
             elif field_type_name in ints:
                 comptime dtype = ints.get(field_type_name).value()
-                field = rebind[type_of(field)](
+                field = rebind[field_type](
                     _parse_int[dtype](val, field_name)
                 )
                 break
@@ -116,7 +121,7 @@ fn cli_parse[T: Defaultable & Movable & Writable]() raises -> T:
             # floats
             elif field_type_name in floats:
                 comptime dtype = floats.get(field_type_name).value()
-                field = rebind[type_of(field)](
+                field = rebind[field_type](
                     _parse_float[dtype](val, field_name)
                 )
                 break
@@ -131,7 +136,7 @@ fn cli_parse[T: Defaultable & Movable & Writable]() raises -> T:
     return instance^
 
 
-fn _parse_int[
+def _parse_int[
     type: DType
 ](val: StringSlice[StaticConstantOrigin], name: String) raises -> Scalar[type]:
     var raw = Int128(atol(val))
@@ -146,7 +151,7 @@ fn _parse_int[
     return Scalar[type](raw)
 
 
-fn _parse_float[
+def _parse_float[
     type: DType
 ](val: StringSlice[StaticConstantOrigin], name: String) raises -> Scalar[type]:
     var raw = atof(val)
@@ -161,33 +166,34 @@ fn _parse_float[
     return Scalar[type](raw)
 
 
-fn _print_help[T: Defaultable & Writable]() raises:
+def _print_help[T: Defaultable & Writable & ImplicitlyDestructible]() raises:
     print("Command Line Parser Help (-h or --help)")
     var loc = source_location()
-    var file_name = basename(loc.file_name)
+    var file_name = basename(loc.file_name())
     print("Usage: mojo {} [options]".format(file_name))
     print("\nOptions:")
 
-    comptime field_names = struct_field_names[T]()
-    comptime field_types = struct_field_types[T]()
-    comptime field_count = struct_field_count[T]()
+    comptime r = reflect[T]
+
+    comptime field_names = r.field_names()
+    comptime field_types = r.field_types()
+    comptime field_count = r.field_count()
 
     var default = T()
 
     comptime for i in range(field_count):
         comptime field_name = field_names[i]
         comptime field_type = field_types[i]
-        comptime field_type_name = get_type_name[field_type]()
 
-        var tn: String = field_type_name
-        if "SIMD" in field_type_name:
-            tn = field_type_name[11:].split(",")[0]
+        var tn: String = reflect[field_type].name()
+        if "SIMD" in tn:
+            tn = String(tn[byte=11:].split(",")[0])
             tn = tn.replace("f", "F").replace("u", "U").replace("i", "I")
 
         ref val = __struct_field_ref(i, default)
 
-        fn _get_padding[S: Writable](a: S, max_pad_len: Int = 10) -> String:
-            var len = len(String(a))
+        def _get_padding[S: Writable](a: S, max_pad_len: Int = 10) -> String:
+            var len = String(a).byte_length()
             return " " * clamp(max_pad_len - len, 1, max_pad_len)
 
         var pad_name = _get_padding(field_name)

@@ -4,36 +4,36 @@ from moclap import cli_parse
 
 
 @fieldwise_init
-struct Serve(Defaultable, Movable, Writable):
+struct Serve(Defaultable, Movable, Writable, ImplicitlyCopyable):
     var port: Int
     var host: String
 
-    fn __init__(out self):
+    def __init__(out self):
         self.port = 8080
         self.host = "localhost"
 
 
 @fieldwise_init
-struct Build(Defaultable, Movable, Writable):
+struct Build(Defaultable, Movable, Writable, ImplicitlyCopyable):
     var target: String
     var release: Bool
 
-    fn __init__(out self):
+    def __init__(out self):
         self.target = "sys"
         self.release = False
 
 
 @fieldwise_init
-struct Launcher(Defaultable, Movable, Writable):
+struct Launcher(Defaultable, Movable, Writable, ImplicitlyCopyable):
     var verbose: Bool
     var cmd: Variant[Serve, Build]
 
-    fn __init__(out self):
+    def __init__(out self):
         self.verbose = False
         self.cmd = Serve()
 
 
-fn main() raises:
+def main() raises:
     var launcher = cli_parse[Launcher]()
 
     print(launcher)

@@ -27,13 +27,13 @@ struct Config(Copyable, Defaultable, Writable):
     var verbose: Bool
     var timeout: Float64
 
-    fn __init__(out self):
+    def __init__(out self):
         self.name = "app"
         self.port = 8080
         self.verbose = False
         self.timeout = 30.0
 
-fn main() raises:
+def main() raises:
     # Generates a parser specialized for the Config struct
     var config = cli_parse[Config]()
 
