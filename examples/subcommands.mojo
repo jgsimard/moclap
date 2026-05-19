@@ -4,7 +4,7 @@ from moclap import cli_parse
 
 
 @fieldwise_init
-struct Serve(Defaultable, Movable, Writable, ImplicitlyCopyable):
+struct Serve(Defaultable, ImplicitlyCopyable, Movable, Writable):
     var port: Int
     var host: String
 
@@ -14,7 +14,7 @@ struct Serve(Defaultable, Movable, Writable, ImplicitlyCopyable):
 
 
 @fieldwise_init
-struct Build(Defaultable, Movable, Writable, ImplicitlyCopyable):
+struct Build(Defaultable, ImplicitlyCopyable, Movable, Writable):
     var target: String
     var release: Bool
 
@@ -24,7 +24,7 @@ struct Build(Defaultable, Movable, Writable, ImplicitlyCopyable):
 
 
 @fieldwise_init
-struct Launcher(Defaultable, Movable, Writable, ImplicitlyCopyable):
+struct Launcher(Defaultable, ImplicitlyCopyable, Movable, Writable):
     var verbose: Bool
     var cmd: Variant[Serve, Build]
 

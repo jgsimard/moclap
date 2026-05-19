@@ -1,20 +1,13 @@
 from std.sys import argv, exit
-from std.reflection import (
-    # struct_field_count,
-    # struct_field_names,
-    # struct_field_types,
-    # get_type_name,
-    # get_base_type_name,
-    # is_struct_type,
-    source_location,
-    # reflect
-)
+from std.reflection import source_location
 from std.os.path import basename
 from std.utils.numerics import max_finite, min_finite
 from std.math import clamp
 
 
-def cli_parse[T: Defaultable & Movable & Writable & ImplicitlyDestructible]() raises -> T:
+def cli_parse[
+    T: Defaultable & Movable & Writable & ImplicitlyDestructible
+]() raises -> T:
     comptime r = reflect[T]
     comptime assert r.is_struct()
 
@@ -77,13 +70,13 @@ def cli_parse[T: Defaultable & Movable & Writable & ImplicitlyDestructible]() ra
             comptime field_name = field_names[idx]
             comptime field_type = field_types[idx]
             comptime field_type_name = reflect[field_type].name()
-            
+
             if arg_name != field_name:
                 continue
 
             ref field = reflect[T].field_ref[idx](instance)
             comptime assert conforms_to(field_type, ImplicitlyCopyable)
-            
+
             comptime if field_type_name == bool:
                 comptime assert conforms_to(field_type, Boolable)
                 field = rebind[field_type](~Bool(field))
@@ -113,17 +106,13 @@ def cli_parse[T: Defaultable & Movable & Writable & ImplicitlyDestructible]() ra
             # ints
             elif field_type_name in ints:
                 comptime dtype = ints.get(field_type_name).value()
-                field = rebind[field_type](
-                    _parse_int[dtype](val, field_name)
-                )
+                field = rebind[field_type](_parse_int[dtype](val, field_name))
                 break
 
             # floats
             elif field_type_name in floats:
                 comptime dtype = floats.get(field_type_name).value()
-                field = rebind[field_type](
-                    _parse_float[dtype](val, field_name)
-                )
+                field = rebind[field_type](_parse_float[dtype](val, field_name))
                 break
 
             else:

@@ -2,7 +2,7 @@ from moclap import cli_parse
 
 
 @fieldwise_init
-struct Config(Copyable, Defaultable, Writable, ImplicitlyCopyable):
+struct Config(Copyable, Defaultable, ImplicitlyCopyable, Writable):
     var name: String
     var port: Int
     var verbose: Bool
