@@ -17,16 +17,15 @@ def cli_parse[
 
     # index
     comptime int = reflect[Int].name()
-    comptime uint = reflect[UInt].name()
 
     # ints
     comptime ints = {
-        # get_type_name[Int](): DType.int,
+        # reflect[Int].name(): DType.int,
         reflect[Int8].name(): DType.int8,
         reflect[Int16].name(): DType.int16,
         reflect[Int32].name(): DType.int32,
         reflect[Int64].name(): DType.int64,
-        # get_type_name[UInt](): DType.uint,
+        reflect[UInt].name(): DType.uint,
         reflect[UInt8].name(): DType.uint8,
         reflect[UInt16].name(): DType.uint16,
         reflect[UInt32].name(): DType.uint32,
@@ -97,10 +96,6 @@ def cli_parse[
             # index types
             elif field_type_name == int:
                 field = rebind[field_type](atol(val))
-                break
-
-            elif field_type_name == uint:
-                field = rebind[field_type](UInt(atol(val)))
                 break
 
             # ints
