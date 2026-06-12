@@ -15,12 +15,9 @@ def cli_parse[
     comptime bool = reflect[Bool].name()
     comptime str = reflect[String].name()
 
-    # index
-    comptime int = reflect[Int].name()
-
     # ints
     comptime ints = {
-        # reflect[Int].name(): DType.int,
+        reflect[Int].name(): DType.int,
         reflect[Int8].name(): DType.int8,
         reflect[Int16].name(): DType.int16,
         reflect[Int32].name(): DType.int32,
@@ -75,6 +72,7 @@ def cli_parse[
 
             ref field = reflect[T].field_ref[idx](instance)
             comptime assert conforms_to(field_type, ImplicitlyCopyable)
+            comptime assert conforms_to(field_type, ImplicitlyDestructible)
 
             comptime if field_type_name == bool:
                 comptime assert conforms_to(field_type, Boolable)
@@ -91,11 +89,6 @@ def cli_parse[
             comptime if field_type_name == str:
                 var parsed = rebind[field_type](String(val))
                 field = parsed^
-                break
-
-            # index types
-            elif field_type_name == int:
-                field = rebind[field_type](atol(val))
                 break
 
             # ints
