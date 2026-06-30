@@ -5,9 +5,7 @@ from std.utils.numerics import max_finite, min_finite
 from std.math import clamp
 
 
-def cli_parse[
-    T: Defaultable & Movable & Writable & ImplicitlyDestructible
-]() raises -> T:
+def cli_parse[T: Defaultable & Movable & ImplicitlyDeletable]() raises -> T:
     comptime r = reflect[T]
     comptime assert r.is_struct()
 
@@ -60,7 +58,7 @@ def cli_parse[
         var arg_name = arg.strip("-")
 
         if arg_name not in materialize[field_names]():
-            raise Error("Warning: Unknown arg --{}".format(arg_name))
+            raise Error(t"Warning: Unknown arg --{arg_name}")
 
         comptime for idx in range(field_count):
             comptime field_name = field_names[idx]
@@ -72,7 +70,7 @@ def cli_parse[
 
             ref field = reflect[T].field_ref[idx](instance)
             comptime assert conforms_to(field_type, ImplicitlyCopyable)
-            comptime assert conforms_to(field_type, ImplicitlyDestructible)
+            comptime assert conforms_to(field_type, ImplicitlyDeletable)
 
             comptime if field_type_name == bool:
                 comptime assert conforms_to(field_type, Boolable)
@@ -84,11 +82,10 @@ def cli_parse[
                 i += 1
                 val = args[i]
             else:
-                raise Error("Arg -- {} requires a value".format(arg_name))
+                raise Error(t"Arg -- {arg_name} requires a value")
 
             comptime if field_type_name == str:
-                var parsed = rebind[field_type](String(val))
-                field = parsed^
+                field = rebind[field_type](String(val))
                 break
 
             # ints
@@ -103,11 +100,9 @@ def cli_parse[
                 field = rebind[field_type](_parse_float[dtype](val, field_name))
                 break
 
-            else:
-                raise Error(
-                    "Cannot parse CLI value for unknown"
-                    " type: {}, value:{}".format(field_type_name, val)
-                )
+            raise Error(
+                t"Cannot parse value {val} of unknown type {field_type_name}"
+            )
         i += 1
 
     return instance^
@@ -115,39 +110,37 @@ def cli_parse[
 
 def _parse_int[
     type: DType
-](val: StringSlice[StaticConstantOrigin], name: String) raises -> Scalar[type]:
+](val: StringSlice[mut=False, _], name: String) raises -> Scalar[type]:
     var raw = Int128(atol(val))
     comptime min = Int128(min_finite[type]())
     comptime max = Int128(max_finite[type]())
     if not min <= raw <= max:
         raise Error(
-            "Value {} for --{}  is out of bounds for {} : [{}, {}]".format(
-                val, name, type, min, max
-            )
+            t"Value {val} for --{name}  is out of bounds for {type} :"
+            t" [{min}, {max}]"
         )
     return Scalar[type](raw)
 
 
 def _parse_float[
     type: DType
-](val: StringSlice[StaticConstantOrigin], name: String) raises -> Scalar[type]:
+](val: StringSlice[mut=False, _], name: String) raises -> Scalar[type]:
     var raw = atof(val)
     comptime min = Float64(min_finite[type]())
     comptime max = Float64(max_finite[type]())
     if not min <= raw <= max:
         raise Error(
-            "Value {} for --{}  is out of bounds for {} : [{}, {}]".format(
-                val, name, type, min, max
-            )
+            t"Value {val} for --{name}  is out of bounds for {type} :"
+            t" [{min}, {max}]"
         )
     return Scalar[type](raw)
 
 
-def _print_help[T: Defaultable & Writable & ImplicitlyDestructible]() raises:
+def _print_help[T: Defaultable & ImplicitlyDeletable]():
     print("Command Line Parser Help (-h or --help)")
     var loc = source_location()
     var file_name = basename(loc.file_name())
-    print("Usage: mojo {} [options]".format(file_name))
+    print(t"Usage: mojo {file_name} [options]")
     print("\nOptions:")
 
     comptime r = reflect[T]
@@ -167,7 +160,7 @@ def _print_help[T: Defaultable & Writable & ImplicitlyDestructible]() raises:
             tn = String(tn[byte=11:].split(",")[0])
             tn = tn.replace("f", "F").replace("u", "U").replace("i", "I")
 
-        ref val = __struct_field_ref(i, default)
+        ref val = reflect[T].field_ref[i](default)
 
         def _get_padding[S: Writable](a: S, max_pad_len: Int = 10) -> String:
             var len = String(a).byte_length()
@@ -176,9 +169,6 @@ def _print_help[T: Defaultable & Writable & ImplicitlyDestructible]() raises:
         var pad_name = _get_padding(field_name)
         var pad_def = _get_padding(tn)
 
-        comptime if not conforms_to(field_type, Writable):
-            raise "type is not Writable = unable to print help"
+        comptime assert conforms_to(type_of(val), Writable)
 
-        dv = String(trait_downcast[Writable](val))
-
-        print(t"--{field_name} {pad_name}: {tn} {pad_def}(default: {dv})")
+        print(t"--{field_name} {pad_name}: {tn} {pad_def}(default: {val})")
