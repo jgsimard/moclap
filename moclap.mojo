@@ -52,8 +52,7 @@ def cli_parse[T: Defaultable & Movable & ImplicitlyDeletable]() raises -> T:
         var arg = args[i]
 
         if not arg.startswith("--"):
-            i += 1
-            continue
+            raise Error(t"Unexpected positional argument: {arg}")
 
         var arg_name = arg.strip("-")
 
@@ -73,16 +72,19 @@ def cli_parse[T: Defaultable & Movable & ImplicitlyDeletable]() raises -> T:
             comptime assert conforms_to(field_type, ImplicitlyDeletable)
 
             comptime if field_type_name == bool:
-                comptime assert conforms_to(field_type, Boolable)
-                field = rebind[field_type](~Bool(field))
+                # comptime assert conforms_to(field_type, Boolable)
+                # if Bool(field) == True:
+                #     raise Error(t"Default value for Bool should be false : {field_name}")
+
+                field = rebind[field_type](True)
                 break
 
-            var val: StringSlice[StaticConstantOrigin]
+            var val: StringSlice[ImmStaticOrigin]
             if i + 1 < len(args):
                 i += 1
                 val = args[i]
             else:
-                raise Error(t"Arg -- {arg_name} requires a value")
+                raise Error(t"Arg --{arg_name} requires a value")
 
             comptime if field_type_name == str:
                 field = rebind[field_type](String(val))
@@ -157,8 +159,13 @@ def _print_help[T: Defaultable & ImplicitlyDeletable]():
 
         var tn: String = reflect[field_type].name()
         if "SIMD" in tn:
-            tn = String(tn[byte=11:].split(",")[0])
-            tn = tn.replace("f", "F").replace("u", "U").replace("i", "I")
+            tn = (
+                tn[byte=11:]
+                .split(",")[0]
+                .replace("f", "F")
+                .replace("u", "U")
+                .replace("i", "I")
+            )
 
         ref val = reflect[T].field_ref[i](default)
 
