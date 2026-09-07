@@ -5,7 +5,7 @@ from std.utils.numerics import max_finite, min_finite
 from std.math import clamp
 
 
-def cli_parse[T: Defaultable & Movable & ImplicitlyDeletable]() raises -> T:
+def cli_parse[T: Defaultable & Movable & Deinitable]() raises -> T:
     comptime r = reflect[T]
     comptime assert r.is_struct()
 
@@ -69,7 +69,7 @@ def cli_parse[T: Defaultable & Movable & ImplicitlyDeletable]() raises -> T:
 
             ref field = reflect[T].field_ref[idx](instance)
             comptime assert conforms_to(field_type, ImplicitlyCopyable)
-            comptime assert conforms_to(field_type, ImplicitlyDeletable)
+            comptime assert conforms_to(field_type, Deinitable)
 
             comptime if field_type_name == bool:
                 # comptime assert conforms_to(field_type, Boolable)
@@ -138,7 +138,7 @@ def _parse_float[
     return Scalar[type](raw)
 
 
-def _print_help[T: Defaultable & ImplicitlyDeletable]():
+def _print_help[T: Defaultable & Deinitable]():
     print("Command Line Parser Help (-h or --help)")
     var loc = source_location()
     var file_name = basename(loc.file_name())
