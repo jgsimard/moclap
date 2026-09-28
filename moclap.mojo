@@ -5,7 +5,24 @@ from std.utils.numerics import max_finite, min_finite
 from std.math import clamp
 
 
-def cli_parse[T: Defaultable & Movable & ImplicitlyDeletable]() raises -> T:
+struct Arg(ImplicitlyCopyable):
+    var help: StaticString
+    var long: StaticString
+    var short: StaticString
+
+    def __init__(
+        out self,
+        *,
+        help: StaticString = "",
+        long: StaticString = "",
+        short: StaticString = "",
+    ):
+        self.help = help
+        self.long = long
+        self.short = short
+
+
+def cli_parse[T: Defaultable & Movable & Deinitable]() raises -> T:
     comptime r = reflect[T]
     comptime assert r.is_struct()
 
@@ -20,11 +37,15 @@ def cli_parse[T: Defaultable & Movable & ImplicitlyDeletable]() raises -> T:
         reflect[Int16].name(): DType.int16,
         reflect[Int32].name(): DType.int32,
         reflect[Int64].name(): DType.int64,
+        reflect[Int128].name(): DType.int128,
+        reflect[Int256].name(): DType.int256,
         reflect[UInt].name(): DType.uint,
         reflect[UInt8].name(): DType.uint8,
         reflect[UInt16].name(): DType.uint16,
         reflect[UInt32].name(): DType.uint32,
         reflect[UInt64].name(): DType.uint64,
+        reflect[UInt128].name(): DType.uint128,
+        reflect[UInt256].name(): DType.uint256,
     }
 
     # floats
@@ -51,7 +72,7 @@ def cli_parse[T: Defaultable & Movable & ImplicitlyDeletable]() raises -> T:
     while i < len(args):
         var arg = args[i]
 
-        if not arg.startswith("--"):
+        if not arg.startswith("-"):
             raise Error(t"Unexpected positional argument: {arg}")
 
         var arg_name = arg.strip("-")
@@ -63,19 +84,25 @@ def cli_parse[T: Defaultable & Movable & ImplicitlyDeletable]() raises -> T:
             comptime field_name = field_names[idx]
             comptime field_type = field_types[idx]
             comptime field_type_name = reflect[field_type].name()
+            var metadata = _arg_metadata[T, idx]()
+            var long_name = String(metadata.long)
+            if not long_name:
+                long_name = field_name
 
-            if arg_name != field_name:
+            var is_long = arg.startswith("--") and arg_name == long_name
+            var is_short = (
+                not arg.startswith("--")
+                and metadata.short
+                and arg_name == metadata.short
+            )
+            if not is_long and not is_short:
                 continue
 
             ref field = reflect[T].field_ref[idx](instance)
             comptime assert conforms_to(field_type, ImplicitlyCopyable)
-            comptime assert conforms_to(field_type, ImplicitlyDeletable)
+            comptime assert conforms_to(field_type, Deinitable)
 
             comptime if field_type_name == bool:
-                # comptime assert conforms_to(field_type, Boolable)
-                # if Bool(field) == True:
-                #     raise Error(t"Default value for Bool should be false : {field_name}")
-
                 field = rebind[field_type](True)
                 break
 
@@ -93,13 +120,13 @@ def cli_parse[T: Defaultable & Movable & ImplicitlyDeletable]() raises -> T:
             # ints
             elif field_type_name in ints:
                 comptime dtype = ints.get(field_type_name).value()
-                field = rebind[field_type](_parse_int[dtype](val, field_name))
+                field = rebind[field_type](_parse_int[dtype](val, long_name))
                 break
 
             # floats
             elif field_type_name in floats:
                 comptime dtype = floats.get(field_type_name).value()
-                field = rebind[field_type](_parse_float[dtype](val, field_name))
+                field = rebind[field_type](_parse_float[dtype](val, long_name))
                 break
 
             raise Error(
@@ -112,10 +139,10 @@ def cli_parse[T: Defaultable & Movable & ImplicitlyDeletable]() raises -> T:
 
 def _parse_int[
     type: DType
-](val: StringSlice[mut=False, _], name: String) raises -> Scalar[type]:
-    var raw = Int128(atol(val))
-    comptime min = Int128(min_finite[type]())
-    comptime max = Int128(max_finite[type]())
+](val: ImmStringSpan, name: String) raises -> Scalar[type]:
+    var raw = Int256(atol(val))
+    comptime min = Int256(min_finite[type]())
+    comptime max = Int256(max_finite[type]())
     if not min <= raw <= max:
         raise Error(
             t"Value {val} for --{name}  is out of bounds for {type} :"
@@ -126,7 +153,7 @@ def _parse_int[
 
 def _parse_float[
     type: DType
-](val: StringSlice[mut=False, _], name: String) raises -> Scalar[type]:
+](val: ImmStringSpan, name: String) raises -> Scalar[type]:
     var raw = atof(val)
     comptime min = Float64(min_finite[type]())
     comptime max = Float64(max_finite[type]())
@@ -138,7 +165,7 @@ def _parse_float[
     return Scalar[type](raw)
 
 
-def _print_help[T: Defaultable & ImplicitlyDeletable]():
+def _print_help[T: Defaultable & Deinitable]():
     print("Command Line Parser Help (-h or --help)")
     var loc = source_location()
     var file_name = basename(loc.file_name())
@@ -156,6 +183,10 @@ def _print_help[T: Defaultable & ImplicitlyDeletable]():
     comptime for i in range(field_count):
         comptime field_name = field_names[i]
         comptime field_type = field_types[i]
+        var metadata = _arg_metadata[T, i]()
+        var long_name = String(metadata.long)
+        if not long_name:
+            long_name = field_name
 
         var tn: String = reflect[field_type].name()
         if "SIMD" in tn:
@@ -173,9 +204,26 @@ def _print_help[T: Defaultable & ImplicitlyDeletable]():
             var len = String(a).byte_length()
             return " " * clamp(max_pad_len - len, 1, max_pad_len)
 
-        var pad_name = _get_padding(field_name)
+        var display_name = String(t"--{long_name}")
+        if metadata.short:
+            display_name = String(t"-{metadata.short}, {display_name}")
+
+        var pad_name = _get_padding(display_name, 14)
         var pad_def = _get_padding(tn)
 
         comptime assert conforms_to(type_of(val), Writable)
 
-        print(t"--{field_name} {pad_name}: {tn} {pad_def}(default: {val})")
+        var help = String(metadata.help)
+        if help:
+            help = String(t" {help}")
+        print(t"{display_name}{pad_name}: {tn} {pad_def}(default: {val}){help}")
+
+
+def _arg_metadata[T: AnyType, field_index: Int]() -> Arg:
+    var result = Arg()
+    var annotations = reflect[T].field_annotations[field_index]()
+    comptime types = type_of(annotations).Ts
+    comptime for i in range(types.length):
+        comptime if types[i] == Arg:
+            result = rebind[Arg](annotations[i])
+    return result^
